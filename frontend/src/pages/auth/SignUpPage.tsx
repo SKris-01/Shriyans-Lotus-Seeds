@@ -1,200 +1,278 @@
-import { useSignUp } from "@clerk/react/legacy"
-import { useState } from 'react'
+import { useSignUp, useAuth } from "@clerk/react"
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Mail, Lock, ArrowRight, Eye, EyeOff, User, CheckCircle2 } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Eye, EyeOff, User, CheckCircle2, Loader2, AlertCircle, ShieldCheck, Phone, Tag, RefreshCw } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const SignUpPage = () => {
-  const { isLoaded, signUp, setActive } = useSignUp()
+  const { isLoaded: signUpLoaded, signUp, setActive } = useSignUp()
+  const { isLoaded: authLoaded } = useAuth()
+  
+  const isLoaded = signUpLoaded || authLoaded || !!signUp
+
+  // Form States
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  
+  // UI States
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [code, setCode] = useState('')
   const navigate = useNavigate()
 
-  if (!isLoaded) return null
+  const isFormValid = 
+    email.includes('@') && 
+    password.length >= 8 && 
+    firstName.trim() !== '' && 
+    lastName.trim() !== '' && 
+    phoneNumber.length >= 10 &&
+    (!verifying || code.length === 6)
+
+  const canSubmit = isLoaded && isFormValid && !loading
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canSubmit || !signUp) return
     setLoading(true)
     setError('')
 
     try {
+      let formattedPhone = phoneNumber.trim()
+      if (!formattedPhone.startsWith('+')) {
+          formattedPhone = `+91${formattedPhone.replace(/\D/g, '')}`
+      }
+
       await signUp.create({
         emailAddress: email,
         password,
         username: username || undefined,
+        firstName,
+        lastName,
+        phoneNumber: formattedPhone,
       })
 
-      // Send the verification code to the user's email
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
+      if (typeof signUp.prepareVerification === 'function') {
+        await signUp.prepareVerification({ strategy: 'email_code' })
+      } else if (typeof (signUp as any).prepareEmailAddressVerification === 'function') {
+        await (signUp as any).prepareEmailAddressVerification({ strategy: 'email_code' })
+      }
 
       setVerifying(true)
     } catch (err: any) {
-      setError(err.errors[0].message)
+      console.error('SignUp Error Detail:', err)
+      setError(err.errors?.[0]?.longMessage || err.errors?.[0]?.message || err.message || 'Sign up failed.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleResend = async () => {
+      if (!signUp) return
+      setLoading(true)
+      setError('')
+      setSuccess('')
+      try {
+          if (typeof signUp.prepareVerification === 'function') {
+            await signUp.prepareVerification({ strategy: 'email_code' })
+          } else if (typeof (signUp as any).prepareEmailAddressVerification === 'function') {
+            await (signUp as any).prepareEmailAddressVerification({ strategy: 'email_code' })
+          }
+          setSuccess('Code resent successfully! Check your inbox.')
+      } catch (err: any) {
+          setError('Failed to resend code. Please try again in a moment.')
+      } finally {
+          setLoading(false)
+      }
   }
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isLoaded || !code || !signUp) return
     setLoading(true)
     setError('')
 
     try {
-      const completeSignUp = await signUp.attemptEmailAddressVerification({
-        code,
-      })
+      let completeSignUp;
+      if (typeof signUp.attemptVerification === 'function') {
+        completeSignUp = await signUp.attemptVerification({ code })
+      } else if (typeof (signUp as any).attemptEmailAddressVerification === 'function') {
+        completeSignUp = await (signUp as any).attemptEmailAddressVerification({ code })
+      } else {
+        throw new Error('Verification method not found.')
+      }
 
       if (completeSignUp.status === 'complete') {
         await setActive({ session: completeSignUp.createdSessionId })
         navigate('/')
-      } else {
-        console.log(completeSignUp)
       }
     } catch (err: any) {
-      setError(err.errors[0].message)
+      console.error('Verification Error:', err)
+      setError(err.errors?.[0]?.longMessage || err.errors?.[0]?.message || 'Verification failed.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSocialLogin = async (strategy: 'oauth_google' | 'oauth_apple') => {
-      try {
-          await signUp.authenticateWithRedirect({
-              strategy,
-              redirectUrl: "/sso-callback",
-              redirectUrlComplete: "/"
-          })
-      } catch (err: any) {
-          setError(err.errors[0].message)
-      }
-  }
-
   return (
-    <div className="min-h-screen pt-32 pb-20 px-6 flex items-center justify-center bg-transparent relative overflow-hidden">
-        {/* Cinematic Backdrop Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-red-600/10 blur-[200px] -z-10 rounded-full animate-pulse-slow"></div>
-        
-        <div className="w-full max-w-md relative">
-            <div className="bg-secondary border border-primary/10 shadow-xl rounded-[40px] md:rounded-[60px] p-8 md:p-12 overflow-hidden flex flex-col transition-all duration-700">
-                {/* Brand Header */}
+    <div className="min-h-screen pt-32 pb-20 px-6 flex items-center justify-center bg-white relative overflow-hidden font-outfit">
+        <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+            <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary rounded-full blur-[120px]"></div>
+            <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent rounded-full blur-[120px]"></div>
+        </div>
+
+        <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-lg relative z-10"
+        >
+            <div className="bg-white border border-primary/10 shadow-[0_32px_64px_-16px_rgba(91,15,46,0.1)] rounded-[40px] p-8 md:p-12">
                 <div className="mb-10 text-center">
-                    <h1 className="text-3xl md:text-4xl font-black italic tracking-tighter text-brand-dark uppercase font-syne mb-2">
+                    <h1 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-3">
                         {verifying ? "Verify Email" : "Create Account"}
                     </h1>
-                    <p className="text-brand-dark/40 font-poppins text-[10px] md:text-xs tracking-widest uppercase font-bold">
-                        {verifying ? "Check your inbox for a magic code" : "Sign up to start shopping"}
+                    <p className="text-primary/40 font-medium text-[10px] uppercase tracking-[0.2em]">
+                        {verifying ? `Code sent to ${email}` : "Complete your profile to join Shriyans"}
                     </p>
                 </div>
 
-                {error && (
-                    <div className="mb-6 bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-bold uppercase tracking-widest px-4 py-3 rounded-2xl text-center">
-                        {error}
-                    </div>
-                )}
+                <AnimatePresence mode="wait">
+                    {error && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mb-6 bg-red-50 border border-red-100 text-red-600 text-[10px] font-bold px-5 py-4 rounded-2xl text-center shadow-sm"
+                        >
+                            <AlertCircle className="w-3 h-3 inline-block mr-2 mb-0.5" />
+                            {error}
+                        </motion.div>
+                    )}
+                    {success && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mb-6 bg-green-50 border border-green-100 text-green-600 text-[10px] font-bold px-5 py-4 rounded-2xl text-center shadow-sm"
+                        >
+                            <CheckCircle2 className="w-3 h-3 inline-block mr-2 mb-0.5" />
+                            {success}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {!verifying ? (
-                    <>
-                        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-                            {/* Username Input - Optional Discovery */}
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="relative group">
-                                <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-dark/20 group-focus-within:text-primary transition-colors" />
+                                <Tag className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
                                 <input 
                                     type="text" 
-                                    placeholder="Username (optional)"
-                                    className="w-full bg-white border border-primary/10 focus:border-primary/40 text-brand-dark placeholder:text-brand-dark/20 px-14 py-4 rounded-full transition-all outline-none font-syne font-black text-sm uppercase tracking-widest [&:-webkit-autofill]:[filter:none] [&:-webkit-autofill]:[transition:background-color_5000000s_ease-in-out_0s] [&:-webkit-autofill]:[-webkit-text-fill-color:#2A0D0E]"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                />
-                            </div>
-
-                            {/* Email Input */}
-                            <div className="relative group">
-                                <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-dark/20 group-focus-within:text-primary transition-colors" />
-                                <input 
-                                    type="email" 
-                                    placeholder="Email address"
-                                    className="w-full bg-white border border-primary/10 focus:border-primary/40 text-brand-dark placeholder:text-brand-dark/20 px-14 py-4 rounded-full transition-all outline-none font-syne font-black text-sm lowercase tracking-widest [&:-webkit-autofill]:[filter:none] [&:-webkit-autofill]:[transition:background-color_5000000s_ease-in-out_0s] [&:-webkit-autofill]:[-webkit-text-fill-color:#2A0D0E]"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="First Name"
+                                    className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                    value={firstName}
+                                    onChange={(e) => setFirstName(e.target.value)}
                                     required
                                 />
                             </div>
-
-                            {/* Password Input */}
                             <div className="relative group">
-                                <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-dark/20 group-focus-within:text-primary transition-colors" />
                                 <input 
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="Password"
-                                    className="w-full bg-white border border-primary/10 focus:border-primary/40 text-brand-dark placeholder:text-brand-dark/20 px-14 py-4 rounded-full transition-all outline-none font-syne font-black text-sm uppercase tracking-widest [&:-webkit-autofill]:[filter:none] [&:-webkit-autofill]:[transition:background-color_5000000s_ease-in-out_0s] [&:-webkit-autofill]:[-webkit-text-fill-color:#2A0D0E]"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    type="text" 
+                                    placeholder="Last Name"
+                                    className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-6 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                    value={lastName}
+                                    onChange={(e) => setLastName(e.target.value)}
                                     required
                                 />
-                                <button 
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-6 top-1/2 -translate-y-1/2 text-brand-dark/20 hover:text-primary transition-colors"
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
                             </div>
-
-                            <button 
-                                type="submit" 
-                                disabled={loading}
-                                className="w-full bg-primary text-white hover:bg-brand-dark py-5 rounded-full font-black uppercase tracking-[0.3em] font-syne text-xs shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                            >
-                                {loading ? "Creating account..." : "Sign Up"}
-                                {!loading && <ArrowRight className="w-4 h-4" />}
-                            </button>
-                        </form>
-
-                        <div className="my-8 flex items-center gap-4">
-                            <div className="flex-1 h-[1px] bg-primary/10"></div>
-                            <span className="text-brand-dark/20 font-black uppercase text-[10px] tracking-widest">or join with</span>
-                            <div className="flex-1 h-[1px] bg-primary/10"></div>
                         </div>
 
-                        {/* Social Logins - Styled as premium colorful capsules */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => handleSocialLogin('oauth_google')}
-                                className="flex items-center justify-center gap-3 py-3 px-6 bg-white border border-primary/20 hover:bg-primary rounded-full transition-all group"
-                            >
-                                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                                </svg>
-                                <span className="text-brand-dark group-hover:text-white font-syne font-black uppercase text-[10px] tracking-widest transition-colors">Google</span>
-                            </button>
-                            <button 
-                                onClick={() => handleSocialLogin('oauth_apple')}
-                                className="flex items-center justify-center gap-3 py-3 px-6 bg-white border border-primary/20 hover:bg-primary rounded-full transition-all group"
-                            >
-                                <svg className="w-4 h-4 fill-brand-dark group-hover:fill-white transition-all" viewBox="0 0 384 512">
-                                    <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-31.4-79-115.3-17.7-153.1V268.7zM249.3 90.5c16.3-20.1 27.2-48 24.2-75.9-24 1-52.9 15.6-70.1 35.7-15.4 18.1-28.9 46.2-25.2 73.5 26.6 2.1 55.4-12.8 71.1-33.3V90.5z"/>
-                                </svg>
-                                <span className="text-brand-dark group-hover:text-white font-syne font-black uppercase text-[10px] tracking-widest transition-colors">Apple</span>
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <form onSubmit={handleVerify} className="flex flex-col gap-6">
                         <div className="relative group">
-                            <CheckCircle2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-dark/20 group-focus-within:text-primary transition-colors" />
+                            <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
                             <input 
                                 type="text" 
-                                placeholder="6-digit verification code"
-                                className="w-full bg-white border border-primary/10 focus:border-primary focus:bg-white text-brand-dark placeholder:text-brand-dark/20 px-14 py-4 rounded-full transition-all outline-none font-syne font-black text-sm uppercase tracking-widest text-center"
+                                placeholder="Username (Unique ID)"
+                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <div className="relative group">
+                            <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
+                            <input 
+                                type="email" 
+                                placeholder="Email Address"
+                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <div className="relative group">
+                            <Phone className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
+                            <div className="absolute left-14 top-1/2 -translate-y-1/2 text-xs font-black text-primary/40 border-r border-primary/10 pr-3">
+                                +91
+                            </div>
+                            <input 
+                                type="tel" 
+                                placeholder="Phone Number"
+                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 pl-24 pr-6 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                value={phoneNumber}
+                                onChange={(e) => setPhoneNumber(e.target.value)}
+                                maxLength={10}
+                                required
+                            />
+                        </div>
+
+                        <div className="relative group">
+                            <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
+                            <input 
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Password (Min 8 chars)"
+                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                            <button 
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-6 top-1/2 -translate-y-1/2 text-primary/20 hover:text-primary transition-colors"
+                            >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
+
+                        <button 
+                            type="submit" 
+                            disabled={!canSubmit}
+                            className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-[10px] shadow-xl transition-all flex items-center justify-center gap-3 ${
+                                canSubmit 
+                                ? "bg-primary text-white shadow-primary/20 hover:scale-[1.02] active:scale-95" 
+                                : "bg-primary/20 text-white cursor-not-allowed"
+                            }`}
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign Up"}
+                            {!loading && isLoaded && <ArrowRight className="w-4 h-4" />}
+                        </button>
+                    </form>
+                ) : (
+                    <form onSubmit={handleVerify} className="space-y-6">
+                        <div className="relative group">
+                            <CheckCircle2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
+                            <input 
+                                type="text" 
+                                placeholder="6-digit code"
+                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm text-center tracking-[0.5em]"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}
                                 maxLength={6}
@@ -204,32 +282,37 @@ const SignUpPage = () => {
 
                         <button 
                             type="submit" 
-                            disabled={loading}
-                            className="w-full bg-primary text-white hover:bg-brand-dark py-5 rounded-full font-black uppercase tracking-[0.3em] font-syne text-xs shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                            disabled={loading || code.length !== 6 || !isLoaded}
+                            className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-[10px] shadow-xl transition-all flex items-center justify-center gap-3 ${
+                                (code.length === 6 && isLoaded)
+                                ? "bg-primary text-white shadow-primary/20 hover:scale-[1.02] active:scale-95" 
+                                : "bg-primary/20 text-white cursor-not-allowed"
+                            }`}
                         >
-                            {loading ? "Verifying..." : "Verify & Start Tasting"}
-                            {!loading && <CheckCircle2 className="w-4 h-4" />}
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Start"}
                         </button>
                         
-                        <button 
-                            type="button"
-                            onClick={() => setVerifying(false)}
-                            className="text-brand-dark/20 hover:text-primary transition-colors font-syne font-black uppercase text-[10px] tracking-widest text-center"
-                        >
-                            Change Email address
-                        </button>
+                        <div className="text-center pt-4">
+                            <button 
+                                type="button"
+                                onClick={handleResend}
+                                disabled={loading}
+                                className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/40 hover:text-primary transition-all flex items-center justify-center gap-2 mx-auto"
+                            >
+                                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                                Resend Verification Code
+                            </button>
+                        </div>
                     </form>
                 )}
 
-                {!verifying && (
-                    <div className="mt-10 text-center">
-                        <p className="text-brand-dark/40 font-poppins text-[10px] tracking-[0.2em] font-bold uppercase">
-                            Already part of us? <Link to="/sign-in" className="text-primary hover:text-brand-dark underline underline-offset-4 transition-colors font-black">Login Back</Link>
-                        </p>
-                    </div>
-                )}
+                <div className="mt-12 text-center">
+                    <p className="text-primary/40 font-bold text-[10px] uppercase tracking-widest">
+                        Already part of us? <Link to="/sign-in" className="text-primary hover:underline underline-offset-4 transition-colors font-black">Login Back</Link>
+                    </p>
+                </div>
             </div>
-        </div>
+        </motion.div>
     </div>
   )
 }

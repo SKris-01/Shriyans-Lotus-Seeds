@@ -23,12 +23,18 @@ interface Product {
 }
 
 const Products = () => {
-    const { data, isLoading } = useQuery({
+    const { data: productsData, isLoading: isProductsLoading } = useQuery({
         queryKey: ['products', 'all'],
         queryFn: () => api('/api/products'),
     })
 
-    const products: Product[] = data?.products || []
+    const { data: categoriesData } = useQuery({
+        queryKey: ['categories'],
+        queryFn: () => api('/api/products/category/list'),
+    })
+
+    const products: Product[] = productsData?.products || []
+    const categories = ['All', ...(categoriesData || [])]
     const [sortBy, setSortBy] = useState('featured')
 
     // Active applied filters
@@ -77,7 +83,7 @@ const Products = () => {
         setIsFilterOpen(false)
     }
 
-    if (isLoading) {
+    if (isProductsLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center pt-32">
                 <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -157,7 +163,7 @@ const Products = () => {
                                     <div className="flex flex-col gap-6">
                                         <label className="text-primary/40 font-black uppercase tracking-[0.2em] text-[10px]">Product Category</label>
                                         <div className="flex flex-wrap gap-2">
-                                            {['All', 'Original', 'Roasted', 'Spicy', 'Sweet'].map(cat => (
+                                            {categories.map(cat => (
                                                 <button
                                                     key={cat}
                                                     onClick={() => setTempCategory(cat)}

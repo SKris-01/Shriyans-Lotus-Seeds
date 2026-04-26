@@ -5,13 +5,13 @@ import Footer from './components/Footer'
 import ScrollToTop from './components/ScrollToTop'
 import UserSync from './components/UserSync'
 import AdminRoute from './components/AdminRoute'
+import SignInPage from './pages/auth/SignInPage'
+import SignUpPage from './pages/auth/SignUpPage'
 
 // Lazy loaded pages
 const Home = lazy(() => import('./pages/Home'))
 const Products = lazy(() => import('./pages/Products'))
 const ProductDetails = lazy(() => import('./pages/ProductDetails'))
-const SignInPage = lazy(() => import('./pages/auth/SignInPage'))
-const SignUpPage = lazy(() => import('./pages/auth/SignUpPage'))
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'))
 const UserProfilePage = lazy(() => import('./pages/UserProfile'))
 const Recipes = lazy(() => import('./pages/Recipes'))
@@ -31,17 +31,13 @@ const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'))
 const AdminRecipes = lazy(() => import('./pages/admin/AdminRecipes'))
 const AdminInquiries = lazy(() => import('./pages/admin/AdminInquiries'))
 
-// Non-lazy for small static components if needed, but Cart was bundled
 import { Cart } from './pages/StaticPages'
 
-// Loading Component
 const PageLoader = () => (
   <div className="flex h-screen w-full items-center justify-center bg-transparent">
     <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent shadow-lg"></div>
   </div>
 )
-
-
 
 const AUTH_ROUTES = ['/sign-in', '/sign-up', '/forgot-password']
 
@@ -53,7 +49,6 @@ function App() {
   return (
     <div className="min-h-screen bg-transparent">
       <ScrollToTop />
-      <UserSync />
       {!isAdminPage && <Navbar />}
 
       <main className={isAdminPage ? '' : 'min-h-screen'}>
@@ -77,7 +72,6 @@ function App() {
             <Route path="/shipping-policy" element={<ShippingPolicy />} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
             
-            {/* Admin Routes */}
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/products" element={<AdminProducts />} />
@@ -89,8 +83,8 @@ function App() {
             <Route path="/profile/order/:id" element={<OrderDetails />} />
           </Routes>
         </Suspense>
+        <UserSync />
       </main>
-
 
       {!isAuthPage && <Footer />}
     </div>
