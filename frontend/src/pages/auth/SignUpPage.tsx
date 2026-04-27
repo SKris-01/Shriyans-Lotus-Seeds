@@ -1,7 +1,7 @@
 import { useSignUp, useAuth } from "@clerk/react"
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Mail, Lock, ArrowRight, Eye, EyeOff, User, CheckCircle2, Loader2, AlertCircle, ShieldCheck, Phone, Tag, RefreshCw } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Eye, EyeOff, User, CheckCircle2, Loader2, AlertCircle, Tag, RefreshCw } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const SignUpPage = () => {
@@ -9,6 +9,8 @@ const SignUpPage = () => {
   const { isLoaded: authLoaded } = useAuth()
   
   const isLoaded = signUpLoaded || authLoaded || !!signUp
+  
+
 
   // Form States
   const [email, setEmail] = useState('')
@@ -16,7 +18,6 @@ const SignUpPage = () => {
   const [username, setUsername] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
   
   // UI States
   const [showPassword, setShowPassword] = useState(false)
@@ -32,7 +33,6 @@ const SignUpPage = () => {
     password.length >= 8 && 
     firstName.trim() !== '' && 
     lastName.trim() !== '' && 
-    phoneNumber.length >= 10 &&
     (!verifying || code.length === 6)
 
   const canSubmit = isLoaded && isFormValid && !loading
@@ -44,25 +44,17 @@ const SignUpPage = () => {
     setError('')
 
     try {
-      let formattedPhone = phoneNumber.trim()
-      if (!formattedPhone.startsWith('+')) {
-          formattedPhone = `+91${formattedPhone.replace(/\D/g, '')}`
-      }
-
+      // Step 1: Create the sign-up attempt
       await signUp.create({
         emailAddress: email,
         password,
         username: username || undefined,
         firstName,
         lastName,
-        phoneNumber: formattedPhone,
       })
 
-      if (typeof signUp.prepareVerification === 'function') {
-        await signUp.prepareVerification({ strategy: 'email_code' })
-      } else if (typeof (signUp as any).prepareEmailAddressVerification === 'function') {
-        await (signUp as any).prepareEmailAddressVerification({ strategy: 'email_code' })
-      }
+      // Step 2: Send verification email - USE THE DISCOVERED METHOD FOR V6
+      await signUp.sendEmailCode()
 
       setVerifying(true)
     } catch (err: any) {
@@ -74,23 +66,22 @@ const SignUpPage = () => {
   }
 
   const handleResend = async () => {
-      if (!signUp) return
-      setLoading(true)
-      setError('')
-      setSuccess('')
-      try {
-          if (typeof signUp.prepareVerification === 'function') {
-            await signUp.prepareVerification({ strategy: 'email_code' })
-          } else if (typeof (signUp as any).prepareEmailAddressVerification === 'function') {
-            await (signUp as any).prepareEmailAddressVerification({ strategy: 'email_code' })
-          }
-          setSuccess('Code resent successfully! Check your inbox.')
-      } catch (err: any) {
-          setError('Failed to resend code. Please try again in a moment.')
-      } finally {
-          setLoading(false)
-      }
+    if (!signUp) return
+    setLoading(true)
+    setError('')
+    setSuccess('')
+    try {
+      // Use the discovered method
+      await signUp.sendEmailCode()
+      setSuccess('Code resent successfully! Check your inbox.')
+    } catch (err: any) {
+      setError('Failed to resend code. Please try again in a moment.')
+    } finally {
+      setLoading(false)
+    }
   }
+
+
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,18 +90,14 @@ const SignUpPage = () => {
     setError('')
 
     try {
-      let completeSignUp;
-      if (typeof signUp.attemptVerification === 'function') {
-        completeSignUp = await signUp.attemptVerification({ code })
-      } else if (typeof (signUp as any).attemptEmailAddressVerification === 'function') {
-        completeSignUp = await (signUp as any).attemptEmailAddressVerification({ code })
-      } else {
-        throw new Error('Verification method not found.')
-      }
+      // Use the discovered verification method
+      const completeSignUp = await signUp.verifyEmailCode({ code })
 
       if (completeSignUp.status === 'complete') {
         await setActive({ session: completeSignUp.createdSessionId })
         navigate('/')
+      } else {
+        throw new Error('Verification failed. Status: ' + completeSignUp.status)
       }
     } catch (err: any) {
       console.error('Verification Error:', err)
@@ -168,103 +155,93 @@ const SignUpPage = () => {
                 </AnimatePresence>
 
                 {!verifying ? (
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                    <>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="relative group">
+                                    <Tag className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="First Name"
+                                        className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                        value={firstName}
+                                        onChange={(e) => setFirstName(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="relative group">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Last Name"
+                                        className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-6 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                        value={lastName}
+                                        onChange={(e) => setLastName(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
                             <div className="relative group">
-                                <Tag className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
+                                <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
                                 <input 
                                     type="text" 
-                                    placeholder="First Name"
+                                    placeholder="Username (Unique ID)"
                                     className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
-                                    value={firstName}
-                                    onChange={(e) => setFirstName(e.target.value)}
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
                                     required
                                 />
                             </div>
+
                             <div className="relative group">
+                                <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
                                 <input 
-                                    type="text" 
-                                    placeholder="Last Name"
-                                    className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-6 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
-                                    value={lastName}
-                                    onChange={(e) => setLastName(e.target.value)}
+                                    type="email" 
+                                    placeholder="Email Address"
+                                    className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     required
                                 />
                             </div>
-                        </div>
 
-                        <div className="relative group">
-                            <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
-                            <input 
-                                type="text" 
-                                placeholder="Username (Unique ID)"
-                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        <div className="relative group">
-                            <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
-                            <input 
-                                type="email" 
-                                placeholder="Email Address"
-                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        <div className="relative group">
-                            <Phone className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
-                            <div className="absolute left-14 top-1/2 -translate-y-1/2 text-xs font-black text-primary/40 border-r border-primary/10 pr-3">
-                                +91
+                            <div className="relative group">
+                                <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
+                                <input 
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Password (Min 8 chars)"
+                                    className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-6 top-1/2 -translate-y-1/2 text-primary/20 hover:text-primary transition-colors"
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
                             </div>
-                            <input 
-                                type="tel" 
-                                placeholder="Phone Number"
-                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 pl-24 pr-6 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
-                                value={phoneNumber}
-                                onChange={(e) => setPhoneNumber(e.target.value)}
-                                maxLength={10}
-                                required
-                            />
-                        </div>
 
-                        <div className="relative group">
-                            <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/20 group-focus-within:text-primary transition-colors" />
-                            <input 
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Password (Min 8 chars)"
-                                className="w-full bg-gray-50/50 border border-primary/5 focus:border-primary/20 focus:bg-white text-primary placeholder:text-primary/20 px-14 py-4 rounded-2xl transition-all outline-none font-bold text-sm"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                            />
+                            <div id="clerk-captcha" className="flex justify-center w-full min-h-[65px]"></div>
+
                             <button 
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-6 top-1/2 -translate-y-1/2 text-primary/20 hover:text-primary transition-colors"
+                                type="submit" 
+                                disabled={!canSubmit}
+                                className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-[10px] shadow-xl transition-all flex items-center justify-center gap-3 ${
+                                    canSubmit 
+                                    ? "bg-primary text-white shadow-primary/20 hover:scale-[1.02] active:scale-95" 
+                                    : "bg-primary/20 text-white cursor-not-allowed"
+                                }`}
                             >
-                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign Up"}
+                                {!loading && isLoaded && <ArrowRight className="w-4 h-4" />}
                             </button>
-                        </div>
+                        </form>
 
-                        <button 
-                            type="submit" 
-                            disabled={!canSubmit}
-                            className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-[10px] shadow-xl transition-all flex items-center justify-center gap-3 ${
-                                canSubmit 
-                                ? "bg-primary text-white shadow-primary/20 hover:scale-[1.02] active:scale-95" 
-                                : "bg-primary/20 text-white cursor-not-allowed"
-                            }`}
-                        >
-                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign Up"}
-                            {!loading && isLoaded && <ArrowRight className="w-4 h-4" />}
-                        </button>
-                    </form>
+
+                    </>
                 ) : (
                     <form onSubmit={handleVerify} className="space-y-6">
                         <div className="relative group">

@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { AuthenticateWithRedirectCallback } from '@clerk/react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -62,6 +63,7 @@ function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/sign-in/*" element={<SignInPage />} />
             <Route path="/sign-up/*" element={<SignUpPage />} />
+            <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback signInForceRedirectUrl="/" signUpForceRedirectUrl="/" />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />

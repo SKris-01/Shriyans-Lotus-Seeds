@@ -6,16 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shriyans Lotus Seeds | Premium Makhana & Healthy Snacks</title>
     
-    <!-- Trusted Types Security Policy -->
-    <script>
-      if (window.trustedTypes && window.trustedTypes.createPolicy) {
-        window.trustedTypes.createPolicy('default', {
-          createHTML: (string) => string,
-          createScript: (string) => string,
-          createScriptURL: (string) => string,
-        });
-      }
-    </script>
+    <!-- CSP Removed Temporarily for Testing -->
 
     <!-- SEO Meta Tags -->
     <meta name="description" content="Discover the finest quality Phool Makhana (Lotus Seeds) from Shriyans. Healthy, roasted, and flavored snacks for a better lifestyle." />
@@ -25,13 +16,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
-
-    <!-- FINAL Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://challenges.cloudflare.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.clerk.com https://images.unsplash.com; connect-src 'self' https://*.clerk.accounts.dev https://challenges.cloudflare.com http://localhost:5000; frame-src 'self' https://challenges.cloudflare.com;">
   </head>
   <body class="bg-white">
     <div id="root"></div>
-    <div id="clerk-captcha"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

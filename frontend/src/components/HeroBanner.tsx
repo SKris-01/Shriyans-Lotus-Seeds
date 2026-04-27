@@ -6,7 +6,7 @@ const images = [
   "https://ik.imagekit.io/damienknights/SLS%20Products/Peri%20Peri%20B.jpeg",
   "https://ik.imagekit.io/damienknights/SLS%20Products/R%20Salt%20Big.jpeg?updatedAt=1776187808430",
   "https://ik.imagekit.io/damienknights/SLS%20Products/Peri%20Peri%20B.jpeg",
-  "https://ik.imagekit.io/damienknights/SLS%20Products/RP1.jpg",
+  "https://ik.imagekit.io/damienknights/SLS%20Products/image1.jpeg",
   "https://ik.imagekit.io/damienknights/SLS%20Products/Himalayan%20Rock%20Salt.jpeg?updatedAt=1776187807307",
 ]
 
