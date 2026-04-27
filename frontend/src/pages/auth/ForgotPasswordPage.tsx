@@ -33,10 +33,17 @@ const ForgotPasswordPage = () => {
     setError('')
 
     try {
-      await signIn.create({
-        strategy: 'reset_password_email_code',
-        identifier: email,
-      })
+      await signIn.create({ identifier: email })
+      
+      // The server error explicitly asked for 'reset_password_code' strategy
+      if (typeof (signIn as any).prepareFirstFactor === 'function') {
+        await (signIn as any).prepareFirstFactor({ strategy: 'reset_password_code' })
+      } else if (typeof (signIn as any).sendResetPasswordEmailCode === 'function') {
+        await (signIn as any).sendResetPasswordEmailCode()
+      } else {
+        throw new Error('No method found to send reset code.')
+      }
+      
       setSuccessfulCreation(true)
     } catch (err: any) {
       console.error('Reset Error:', err)
@@ -54,18 +61,26 @@ const ForgotPasswordPage = () => {
     setError('')
 
     try {
-      const result = await signIn.attemptFirstFactor({
-        strategy: 'reset_password_email_code',
-        code,
-        password,
-      })
+      let result;
+      // Try the new explicit method first
+      if (typeof (signIn as any).submitResetPassword === 'function') {
+        result = await (signIn as any).submitResetPassword({ code, password })
+      } else if (typeof (signIn as any).attemptFirstFactor === 'function') {
+        result = await (signIn as any).attemptFirstFactor({
+          strategy: 'reset_password_email_code',
+          code,
+          password,
+        })
+      } else {
+        throw new Error('No method found to verify reset code.')
+      }
 
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId })
         navigate('/')
       } else {
-        console.log('Reset result:', result)
-        setError('Something went wrong. Please try again.')
+        console.log('Reset result:', JSON.stringify(result, null, 2))
+        setError('Something went wrong. Status: ' + result.status)
       }
     } catch (err: any) {
       console.error('Verification Error:', err)

@@ -90,18 +90,40 @@ const SignUpPage = () => {
     setError('')
 
     try {
-      // Use the discovered verification method
-      const completeSignUp = await signUp.verifyEmailCode({ code })
+      // 1. Attempt verification
+      const verifyResult = await signUp.verifyEmailCode({ code })
+      console.log('Verify Result Raw:', verifyResult);
+      
+      // 2. Try to find the status in any possible location
+      const completeSignUp = (verifyResult as any).response || verifyResult;
+      const status = completeSignUp.status || (verifyResult as any).status;
 
-      if (completeSignUp.status === 'complete') {
-        await setActive({ session: completeSignUp.createdSessionId })
+      // 3. If still undefined, show the keys to debug
+      if (!status) {
+        const keys = Object.keys(verifyResult).join(', ');
+        setError(`Status undefined. Available keys: ${keys}. Data: ${JSON.stringify(verifyResult).substring(0, 50)}`);
+        return;
+      }
+
+      if (status === 'complete') {
+        await setActive({ session: completeSignUp.createdSessionId || (verifyResult as any).createdSessionId })
         navigate('/')
+      } else if (status === 'missing_requirements') {
+        const updateResult = await signUp.update({})
+        const finalStep = (updateResult as any).response || updateResult;
+        
+        if (finalStep.status === 'complete') {
+          await setActive({ session: finalStep.createdSessionId || (updateResult as any).createdSessionId })
+          navigate('/')
+        } else {
+          setError(`Account created but still missing requirements.`)
+        }
       } else {
-        throw new Error('Verification failed. Status: ' + completeSignUp.status)
+        setError('Signup status: ' + status)
       }
     } catch (err: any) {
       console.error('Verification Error:', err)
-      setError(err.errors?.[0]?.longMessage || err.errors?.[0]?.message || 'Verification failed.')
+      setError(err.errors?.[0]?.longMessage || err.errors?.[0]?.message || 'Verification failed. Please check the code.')
     } finally {
       setLoading(false)
     }
